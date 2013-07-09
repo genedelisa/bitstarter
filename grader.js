@@ -48,30 +48,56 @@ var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
 
-var response2console = function(result, response) {
-    if (result instanceof Error) {
-        console.error('Error: ' + util.format(response.message));
-    } else {
-        console.error("result %s", result);
-    }
+var buildfn = function(csvfile, headers) {
+    var response2console = function(result, response) {
+        if (result instanceof Error) {
+            console.error('Error: ' + util.format(response.message));
+        } else {
+            console.error("Wrote %s", csvfile);
+//            fs.writeFileSync(csvfile, result);
+//            csv2console(csvfile, headers);
+        }
+    };
+    return response2console;
 };
 
-var urlContents = function(url) {
-    //rest.get(url).on('complete', response2console);
-    var contents = rest.get(url).on('complete', function(data) {
-	return data;
-    });
-    return cheerio.load(contents);
+var urlContents = function(url, checksfile) {
+    var contents = rest.get(url)
+	.on('complete', function(data, response) {
+            if (data instanceof Error) {
+		console.error('Error: ' + util.format(data.message));
+		return data;
+            } else {
+//		console.log("no error");
+//		console.log('status:' + response.statusCode); 
+//		console.log(data);
+		$ = cheerio.load(data);
+//		console.log($.html());
+		var checks = loadChecks(checksfile).sort();
+//		console.log("checks");
+//		console.log(checks);
+		var out = {};
+		for(var ii in checks) {
+//		    console.log($(checks[ii]));
+		    var present = $(checks[ii]).length > 0;
+		    out[checks[ii]] = present;
+		}
+//		console.log(out);
+		var outJson = JSON.stringify(out, null, 4);
+		console.log(outJson);
+		return out;
+	    }
+	})
+	.on('error', function(err, response) { 
+	    console.log('An error occurred:' + err); 
+
+	});
+
 }
 
 var checkURL = function(URL, checksfile) {
-    $ = urlContents(URL);
-    var checks = loadChecks(checksfile).sort();
-    var out = {};
-    for(var ii in checks) {
-        var present = $(checks[ii]).length > 0;
-        out[checks[ii]] = present;
-    }
+    var out = urlContents(URL, checksfile);
+
     return out;
 }
 
@@ -99,10 +125,11 @@ if(require.main == module) {
         .option('-u, --url <url>', 'URL to index.html')
         .parse(process.argv);
     if(program.url) {
-	console.log("got url " + program.url);
+//	console.log("got url " + program.url);
 	var checkJson = checkURL(program.url, program.checks);
-	var outJson = JSON.stringify(checkJson, null, 4);
-	console.log(outJson);
+//	console.log("returned json" + checkJson);
+//	var outJson = JSON.stringify(checkJson, null, 4);
+//	console.log(outJson);
     } else {
 	var checkJson = checkHtmlFile(program.file, program.checks);
 	var outJson = JSON.stringify(checkJson, null, 4);
